@@ -1,0 +1,839 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Calendario Cíclico</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0F172A; /* bg-slate-900 */
+            color: #FFFFFF; /* text-white */
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; /* font-sans */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem; /* p-4 */
+            box-sizing: border-box;
+        }
+
+        .app-container {
+            width: 100%;
+            background-color: #0F172A; /* bg-slate-900 */
+            padding: 1rem; /* p-4 */
+            border-radius: 0.5rem; /* rounded-lg */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            margin-bottom: 1.5rem; /* mb-6 */
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.25rem; /* text-4xl */
+            line-height: 2.5rem;
+            font-weight: 700; /* font-bold */
+            color: #38BDF8; /* text-sky-400 */
+            margin: 0 0 0.5rem 0;
+        }
+
+        header p {
+            color: #CBD5E1; /* text-slate-300 */
+            margin-top: 0.5rem; /* mt-2 */
+            max-width: 32rem; /* max-w-lg */
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        main {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 1.5rem; /* mb-6 */
+        }
+
+        .circle-visualization-container {
+            width: 100%;
+        }
+        
+        .controls-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem; /* gap-4 */
+            margin-bottom: 1.5rem; /* mb-6 */
+        }
+
+        .resolution-controls-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem; /* gap-3 */
+            padding: 0.5rem; /* p-2 */
+            background-color: #1E293B; /* bg-slate-800 */
+            border-radius: 0.375rem; /* rounded-md */
+        }
+
+        .resolution-display {
+            font-size: 0.875rem; /* text-sm */
+            color: #E2E8F0; /* text-slate-200 */
+            padding: 0 0.5rem; /* px-2 */
+            min-width: 160px; /* Ensure space for text */
+            text-align: center;
+        }
+        
+        .resolution-button, .download-button {
+            padding: 0.5rem 1rem; /* px-4 py-2 */
+            background-color: #0EA5E9; /* bg-sky-500 */
+            color: #FFFFFF; /* text-white */
+            font-weight: 600; /* font-semibold */
+            border-radius: 0.375rem; /* rounded-md */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* shadow-md */
+            border: none;
+            cursor: pointer;
+            transition-property: background-color, opacity;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .resolution-button {
+             padding: 0.5rem; /* p-2 for smaller arrow buttons */
+             min-width: 2.5rem; /* min-w-10 */
+        }
+
+        .resolution-button:hover, .download-button:hover {
+            background-color: #0284C7; /* hover:bg-sky-600 */
+        }
+
+        .resolution-button:focus, .download-button:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.5); 
+        }
+
+        .resolution-button:disabled, .download-button:disabled {
+            opacity: 0.5; /* disabled:opacity-50 */
+            cursor: not-allowed; /* disabled:cursor-not-allowed */
+        }
+        
+        .download-button {
+            min-width: 180px; /* Ensure consistent width */
+        }
+
+        footer {
+            margin-top: 2rem; /* mt-8 */
+            font-size: 0.75rem; /* text-xs */
+            line-height: 1rem;
+            color: #64748B; /* text-slate-500 */
+            text-align: center;
+            min-height: 1rem; /* Ensure footer takes up space even if empty */
+        }
+
+        svg {
+            display: block; 
+            width: 100%;
+            height: auto;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="app-root"></div>
+
+    <script>
+        // --- Constants ---
+        const MONTHS_FULL = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; // Non-leap year
+        const NUM_DAYS_TOTAL = DAYS_IN_MONTH.reduce((sum, days) => sum + days, 0);
+        const NUM_MINUTE_SEGMENTS = 60;
+        const NUM_HOUR_SEGMENTS = 24;
+        const SEASONS = [
+          { name: "Primavera", startDay: 20, startMonth: 2, color: "#B5F5BE" }, // March 20th
+          { name: "Verano",    startDay: 21, startMonth: 5, color: "#FFFDD0" }, // June 21st
+          { name: "Otoño",     startDay: 22, startMonth: 8, color: "#FFDDBC" }, // September 22nd
+          { name: "Invierno",  startDay: 21, startMonth: 11, color: "#AACAEF" } // December 21st
+        ];
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const INITIAL_RESOLUTION = 1024;
+        const MIN_RESOLUTION = 1;
+
+        // --- State Variables ---
+        let isGeneratingImage = false;
+        let currentTime = new Date();
+        let minuteForMinuteHand = currentTime.getMinutes() + (currentTime.getSeconds() / 60.0);
+        let hourForHourHand = currentTime.getHours() + (currentTime.getMinutes() / 60.0);
+        let lastSecondEpoch = null; 
+        let lastMinuteEpoch = null;
+        let targetResolution = INITIAL_RESOLUTION;
+
+        // --- DOM Elements (will be assigned in initializeApp) ---
+        let svgElement, yearTextElement, dayProgressHandElement, seasonDayProgressHandElement, hourHandElement, minuteHandElement, secondHandElement;
+        let resolutionDisplayText, increaseResButton, decreaseResButton, downloadImageButton;
+
+        // --- Helper Functions ---
+        function calculateDayOfYear(day, month, daysInMonthArray) {
+            let dayOfYear = 0;
+            for (let m = 0; m < month; m++) { 
+                dayOfYear += daysInMonthArray[m];
+            }
+            dayOfYear += (day - 1); 
+            return dayOfYear;
+        }
+
+        function describeArc(x, y, radius, startAngle, endAngle) {
+            const start = {
+                x: x + radius * Math.cos(startAngle),
+                y: y + radius * Math.sin(startAngle),
+            };
+            const end = {
+                x: x + radius * Math.cos(endAngle),
+                y: y + radius * Math.sin(endAngle),
+            };
+            let adjustedEndAngle = endAngle;
+            
+            if (adjustedEndAngle < startAngle) { 
+                adjustedEndAngle += 2 * Math.PI;
+            }
+
+            if (Math.abs(adjustedEndAngle - startAngle) >= (2 * Math.PI - 0.0001)) {
+                 adjustedEndAngle = startAngle + (2 * Math.PI - 0.0001); 
+            }
+            const largeArcFlag = (adjustedEndAngle - startAngle) <= Math.PI ? "0" : "1";
+            return ["M", start.x, start.y, "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y].join(" ");
+        }
+
+        function describeFilledArcSegment(x, y, outerRadius, innerRadius, startAngle, endAngle) {
+            const outerStart = { x: x + outerRadius * Math.cos(startAngle), y: y + outerRadius * Math.sin(startAngle) };
+            const outerEnd = { x: x + outerRadius * Math.cos(endAngle), y: y + outerRadius * Math.sin(endAngle) };
+            const innerStart = { x: x + innerRadius * Math.cos(startAngle), y: y + innerRadius * Math.sin(startAngle) };
+            const innerEnd = { x: x + innerRadius * Math.cos(endAngle), y: y + innerRadius * Math.sin(endAngle) };
+
+            let adjustedEndAngle = endAngle;
+            if (adjustedEndAngle < startAngle) { 
+                adjustedEndAngle += 2 * Math.PI; 
+            }
+            
+            if (Math.abs((adjustedEndAngle - startAngle) - 2 * Math.PI) < 0.0001) {
+                adjustedEndAngle = startAngle + (2 * Math.PI - 0.0001); 
+            } else if (adjustedEndAngle - startAngle > 2 * Math.PI) {
+                 adjustedEndAngle = startAngle + (2 * Math.PI - 0.0001);
+            }
+
+            const largeArcFlag = (adjustedEndAngle - startAngle) <= Math.PI ? "0" : "1";
+            
+            return [
+                "M", outerStart.x, outerStart.y,
+                "A", outerRadius, outerRadius, 0, largeArcFlag, 1, outerEnd.x, outerEnd.y,
+                "L", innerEnd.x, innerEnd.y,
+                "A", innerRadius, innerRadius, 0, largeArcFlag, 0, innerStart.x, innerStart.y,
+                "Z"
+            ].join(" ");
+        }
+
+        function createSVGElement(tag, attributes = {}) {
+            const el = document.createElementNS(SVG_NS, tag);
+            for (const key in attributes) {
+                el.setAttribute(key, attributes[key]);
+            }
+            return el;
+        }
+
+        // --- Resolution and Image Download Logic ---
+        function updateResolutionDisplay() {
+            if (resolutionDisplayText) {
+                resolutionDisplayText.textContent = `Res: ${targetResolution} x ${targetResolution} px`;
+            }
+            if (decreaseResButton) {
+                decreaseResButton.disabled = targetResolution <= MIN_RESOLUTION || isGeneratingImage;
+            }
+            if (increaseResButton) {
+                increaseResButton.disabled = isGeneratingImage;
+            }
+        }
+
+        function increaseResolution() {
+            if (isGeneratingImage) return;
+            targetResolution *= 2;
+            updateResolutionDisplay();
+        }
+
+        function decreaseResolution() {
+            if (isGeneratingImage) return;
+            if (targetResolution > MIN_RESOLUTION) {
+                targetResolution = Math.max(MIN_RESOLUTION, Math.floor(targetResolution / 2));
+            }
+            updateResolutionDisplay();
+        }
+
+        async function handleDownloadImage() {
+            if (!svgElement) {
+                alert("Error: Elemento SVG no encontrado para la generación de imagen.");
+                return;
+            }
+            if (isGeneratingImage) return;
+
+            isGeneratingImage = true;
+            downloadImageButton.disabled = true;
+            downloadImageButton.textContent = 'Generando...';
+            if (increaseResButton) increaseResButton.disabled = true;
+            if (decreaseResButton) decreaseResButton.disabled = true;
+
+            try {
+                const svgXml = new XMLSerializer().serializeToString(svgElement);
+                const svgBlob = new Blob([svgXml], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = targetResolution;
+                    canvas.height = targetResolution;
+                    const ctx = canvas.getContext('2d');
+
+                    // Fill background
+                    ctx.fillStyle = '#0F172A'; // Match app background
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Draw the SVG image onto the canvas
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    URL.revokeObjectURL(url); // Clean up blob URL
+
+                    // Trigger download
+                    const a = document.createElement('a');
+                    a.href = canvas.toDataURL('image/png');
+                    a.download = `calendario_ciclico_${targetResolution}px.png`;
+                    document.body.appendChild(a); // Required for Firefox
+                    a.click();
+                    document.body.removeChild(a);
+
+                    isGeneratingImage = false;
+                    downloadImageButton.disabled = false;
+                    downloadImageButton.textContent = 'Descargar Imagen';
+                    updateResolutionDisplay(); // Re-evaluates disable state of resolution buttons
+                };
+                img.onerror = (e) => {
+                    console.error("Error al cargar SVG en el objeto de imagen:", e);
+                    alert("Error al preparar la imagen. No se pudo cargar el SVG.");
+                    URL.revokeObjectURL(url);
+                    isGeneratingImage = false;
+                    downloadImageButton.disabled = false;
+                    downloadImageButton.textContent = 'Descargar Imagen';
+                    updateResolutionDisplay();
+                };
+                img.src = url;
+
+            } catch (error) {
+                console.error("Error al generar la imagen:", error);
+                alert("Ocurrió un error al generar la imagen. Por favor, revisa la consola.");
+                isGeneratingImage = false;
+                downloadImageButton.disabled = false;
+                downloadImageButton.textContent = 'Descargar Imagen';
+                updateResolutionDisplay();
+            }
+        }
+
+        // --- Circle Display Logic ---
+        function createCircleDisplay(size, parentElement) {
+            const totalRadius = size / 2;
+            const centerX = 0; 
+            const centerY = 0; 
+
+            svgElement = createSVGElement('svg', {
+                width: size,
+                height: size,
+                viewBox: `${-totalRadius} ${-totalRadius} ${size} ${size}`,
+                "aria-label": "Calendario circular con un anillo exterior para los meses, un anillo para los días que también muestra una manecilla verde para el día actual indicando el avance del día actualizando su posición cada 3 horas, un anillo para minutos/segundos (0-59) que también muestra una manecilla blanca indicando el minuto actual y actualizándose cada segundo de forma gradual, y una manecilla roja indicando el segundo actual moviéndose suavemente, un anillo para horas (0-23) que muestra una manecilla azul indicando la hora actual y su progreso gradual, un anillo para las estaciones (Invierno, Primavera, Verano, Otoño) con colores pastel y el año actual en el centro. Las etiquetas se curvan a lo largo de sus respectivos anillos.",
+                fontFamily: "Helvetica, Arial, sans-serif" 
+            });
+            parentElement.appendChild(svgElement);
+            
+            // Explicit background for SVG, good for direct SVG viewing/use
+            const bgRect = createSVGElement('rect', {
+                x: -totalRadius, y: -totalRadius, width: size, height: size, fill: '#0F172A'
+            });
+            svgElement.appendChild(bgRect);
+
+            const defs = createSVGElement('defs');
+            svgElement.appendChild(defs);
+
+            const monthRingOuterRadius = totalRadius * 1.00;
+            const monthRingInnerRadius = totalRadius * 0.934;
+            const dayRingOuterRadius = totalRadius * 0.934;
+            const dayRingInnerRadius = totalRadius * 0.918;
+            const minuteRingOuterRadius = totalRadius * 0.918;
+            const minuteRingInnerRadius = totalRadius * 0.819;
+            const hourRingOuterRadius = totalRadius * 0.819;
+            const hourRingInnerRadius = totalRadius * 0.606;
+            const seasonRingOuterRadius = totalRadius * 0.606;
+            const seasonRingInnerRadius = totalRadius * 0.303;
+            const yearCircleRadius = totalRadius * 0.303;
+
+
+            const monthCellHeight = monthRingOuterRadius - monthRingInnerRadius;
+            const dayCellHeight = dayRingOuterRadius - dayRingInnerRadius;
+            const minuteCellHeight = minuteRingOuterRadius - minuteRingInnerRadius;
+            const hourCellHeight = hourRingOuterRadius - hourRingInnerRadius;
+            const seasonCellHeight = seasonRingOuterRadius - seasonRingInnerRadius;
+
+            // Boundary Circles
+            [monthRingOuterRadius, monthRingInnerRadius, dayRingInnerRadius, minuteRingInnerRadius, hourRingInnerRadius, seasonRingInnerRadius].forEach(r => {
+                svgElement.appendChild(createSVGElement('circle', { cx: centerX, cy: centerY, r: r, fill: 'none', stroke: '#64748B', 'stroke-width': 0.5 }));
+            });
+            
+            // Season Backgrounds & Divisions & Text
+            const seasonTextPathRadius = (seasonRingOuterRadius + seasonRingInnerRadius) / 2;
+            const seasonFontSize = Math.max(5, seasonCellHeight * 0.35);
+            const seasonArcPaddingFactor = 0.05; 
+
+            const seasonStartDaysOfYear = SEASONS.map(season => 
+                calculateDayOfYear(season.startDay, season.startMonth, DAYS_IN_MONTH)
+            );
+
+            const seasonStartAnglesRad = seasonStartDaysOfYear.map(dayOfYear => {
+                const proportionOfYear = Math.min(dayOfYear, NUM_DAYS_TOTAL -1) / NUM_DAYS_TOTAL;
+                return proportionOfYear * 2 * Math.PI - Math.PI / 2;
+            });
+
+
+            for (let i = 0; i < SEASONS.length; i++) {
+                const currentSeason = SEASONS[i];
+                const currentSeasonStartAngleRad = seasonStartAnglesRad[i];
+                
+                const nextSeasonIndex = (i + 1) % SEASONS.length;
+                const currentSeasonEndAngleRad = seasonStartAnglesRad[nextSeasonIndex]; 
+
+                svgElement.appendChild(createSVGElement('path', {
+                    d: describeFilledArcSegment(centerX, centerY, seasonRingOuterRadius, seasonRingInnerRadius, currentSeasonStartAngleRad, currentSeasonEndAngleRad),
+                    fill: currentSeason.color, 'fill-opacity': 0.08
+                }));
+                svgElement.appendChild(createSVGElement('line', { 
+                    x1: centerX + seasonRingInnerRadius * Math.cos(currentSeasonStartAngleRad), y1: centerY + seasonRingInnerRadius * Math.sin(currentSeasonStartAngleRad),
+                    x2: centerX + seasonRingOuterRadius * Math.cos(currentSeasonStartAngleRad), y2: centerY + seasonRingOuterRadius * Math.sin(currentSeasonStartAngleRad),
+                    stroke: '#94A3B8', 'stroke-width': 0.3
+                }));
+
+                let effectiveEndAngleForTextSpanCalc = currentSeasonEndAngleRad;
+                if (effectiveEndAngleForTextSpanCalc < currentSeasonStartAngleRad) { 
+                    effectiveEndAngleForTextSpanCalc += 2 * Math.PI;
+                }
+                const actualAngularSpanForSeason = effectiveEndAngleForTextSpanCalc - currentSeasonStartAngleRad;
+                const arcPaddingValue = actualAngularSpanForSeason * seasonArcPaddingFactor;
+                
+                const textPathStart = currentSeasonStartAngleRad + arcPaddingValue;
+                const textPathEnd = currentSeasonEndAngleRad - arcPaddingValue; 
+
+                const paddedArcSpanForText = actualAngularSpanForSeason - (2 * arcPaddingValue);
+
+                const pathId = `seasonArc${currentSeason.name.replace(/\s+/g, '')}`;
+
+                if (paddedArcSpanForText > 0.1) { 
+                    defs.appendChild(createSVGElement('path', { 
+                        id: pathId, 
+                        d: describeArc(centerX, centerY, seasonTextPathRadius, textPathStart, textPathEnd), 
+                        fill: 'none' 
+                    }));
+                    const textEl = createSVGElement('text', { 
+                        'font-size': seasonFontSize, 
+                        fill: '#F1F5F9', 
+                        'dominant-baseline': 'middle', 
+                        'letter-spacing': 0.2,
+                        'fill-opacity': '0.66'
+                    });
+                    const textPathEl = createSVGElement('textPath', { href: `#${pathId}`, startOffset: '50%', 'text-anchor': 'middle' });
+                    textPathEl.textContent = currentSeason.name;
+                    textEl.appendChild(textPathEl);
+                    svgElement.appendChild(textEl);
+                } else {
+                     const midAngle = currentSeasonStartAngleRad + actualAngularSpanForSeason / 2;
+                     const textX = centerX + seasonTextPathRadius * Math.cos(midAngle);
+                     const textY = centerY + seasonTextPathRadius * Math.sin(midAngle);
+                     const fallbackText = createSVGElement('text', {
+                        x:textX, y:textY, 
+                        'font-size':seasonFontSize * 0.9, 
+                        fill:'#F1F5F9', 
+                        'dominant-baseline':'middle', 
+                        'text-anchor':'middle',
+                        transform:`rotate(${(midAngle * 180 / Math.PI) + 90} ${textX} ${textY})`,
+                        'fill-opacity': '0.66'
+                     });
+                     fallbackText.textContent = currentSeason.name.substring(0,3).toUpperCase();
+                     svgElement.appendChild(fallbackText);
+                }
+            }
+
+
+            // Month Ring
+            const monthTextPathRadius = (monthRingOuterRadius + monthRingInnerRadius) / 2;
+            const monthFontSize = Math.max(6, monthCellHeight * 0.50);
+            const monthArcPaddingFactor = 0.03;
+            let cumulativeDaysForMonthStart = 0;
+            for (let i = 0; i < MONTHS_FULL.length; i++) {
+                const monthStartAngleRad = (cumulativeDaysForMonthStart / NUM_DAYS_TOTAL) * 2 * Math.PI - Math.PI / 2;
+                svgElement.appendChild(createSVGElement('line', {
+                    x1: centerX + monthRingInnerRadius * Math.cos(monthStartAngleRad), y1: centerY + monthRingInnerRadius * Math.sin(monthStartAngleRad),
+                    x2: centerX + monthRingOuterRadius * Math.cos(monthStartAngleRad), y2: centerY + monthRingOuterRadius * Math.sin(monthStartAngleRad),
+                    stroke: '#64748B', 'stroke-width': 0.5
+                }));
+                const daysInCurrentMonth = DAYS_IN_MONTH[i];
+                const monthEndAngleRad = ((cumulativeDaysForMonthStart + daysInCurrentMonth) / NUM_DAYS_TOTAL) * 2 * Math.PI - Math.PI / 2;
+                
+                let effectiveMonthEndAngleForTextSpan = monthEndAngleRad;
+                if(effectiveMonthEndAngleForTextSpan < monthStartAngleRad) effectiveMonthEndAngleForTextSpan += 2 * Math.PI; 
+                const monthAngularSpan = effectiveMonthEndAngleForTextSpan - monthStartAngleRad;
+
+                const currentMonthArcPadding = monthAngularSpan * monthArcPaddingFactor;
+                const pathId = `monthArc${i}`;
+                const textArcStartAngle = monthStartAngleRad + currentMonthArcPadding;
+                const textArcEndAngle = monthEndAngleRad - currentMonthArcPadding; 
+
+                const paddedMonthArcSpan = monthAngularSpan - (2 * currentMonthArcPadding);
+
+                if (paddedMonthArcSpan > 0.05) { 
+                    defs.appendChild(createSVGElement('path', { id: pathId, d: describeArc(centerX, centerY, monthTextPathRadius, textArcStartAngle, textArcEndAngle), fill: 'none' }));
+                    const textEl = createSVGElement('text', { 'font-size': monthFontSize, fill: '#CBD5E1', 'dominant-baseline': 'middle', 'letter-spacing': 0.5 });
+                    const textPathEl = createSVGElement('textPath', { href: `#${pathId}`, startOffset: '50%', 'text-anchor': 'middle' });
+                    textPathEl.textContent = MONTHS_FULL[i];
+                    textEl.appendChild(textPathEl);
+                    svgElement.appendChild(textEl);
+                } else {
+                    const midAngle = monthStartAngleRad + monthAngularSpan / 2;
+                    const textX = centerX + monthTextPathRadius * Math.cos(midAngle);
+                    const textY = centerY + monthTextPathRadius * Math.sin(midAngle);
+                    const fallbackText = createSVGElement('text', {
+                       x:textX, y:textY, 'font-size':monthFontSize * 0.85, fill:'#CBD5E1', 'dominant-baseline':'middle', 'text-anchor':'middle',
+                       transform:`rotate(${(midAngle * 180 / Math.PI) + 90} ${textX} ${textY})`
+                    });
+                    fallbackText.textContent = MONTHS_FULL[i].substring(0,3).toUpperCase();
+                    svgElement.appendChild(fallbackText);
+                }
+                cumulativeDaysForMonthStart += daysInCurrentMonth;
+            }
+
+            // Day Ring
+            const dayTextPathRadius = (dayRingOuterRadius + dayRingInnerRadius) / 2;
+            const dayFontSize = Math.max(2, dayCellHeight * 0.70);
+            const anglePerDayRadians = (2 * Math.PI) / NUM_DAYS_TOTAL;
+            const dayTextArcSegmentAngle = anglePerDayRadians * 0.80;
+            let cumulativeDayIndex = 0;
+            for (let monthIdx = 0; monthIdx < DAYS_IN_MONTH.length; monthIdx++) {
+                for (let day = 0; day < DAYS_IN_MONTH[monthIdx]; day++) {
+                    const overallDayIndex = cumulativeDayIndex + day;
+                    const dayDivisionLineAngle = (overallDayIndex / NUM_DAYS_TOTAL) * 2 * Math.PI - Math.PI / 2;
+                    svgElement.appendChild(createSVGElement('line', {
+                        x1: centerX + dayRingInnerRadius * Math.cos(dayDivisionLineAngle), y1: centerY + dayRingInnerRadius * Math.sin(dayDivisionLineAngle),
+                        x2: centerX + dayRingOuterRadius * Math.cos(dayDivisionLineAngle), y2: centerY + dayRingOuterRadius * Math.sin(dayDivisionLineAngle),
+                        stroke: '#0369A1', 'stroke-width': 0.25
+                    }));
+                    const dayOfMonth = day + 1;
+                    const pathId = `dayArc${overallDayIndex}`;
+                    const dayTextCenterAngle = dayDivisionLineAngle + (anglePerDayRadians / 2);
+                    const dayArcStartAngle = dayTextCenterAngle - dayTextArcSegmentAngle / 2;
+                    const dayArcEndAngle = dayTextCenterAngle + dayTextArcSegmentAngle / 2;
+
+                    if (dayArcEndAngle > dayArcStartAngle && (dayArcEndAngle - dayArcStartAngle) > 0.001) { 
+                         defs.appendChild(createSVGElement('path', { id: pathId, d: describeArc(centerX, centerY, dayTextPathRadius, dayArcStartAngle, dayArcEndAngle), fill: 'none' }));
+                         const textEl = createSVGElement('text', { 'font-size': dayFontSize, fill: '#E2E8F0', 'dominant-baseline': 'middle' });
+                         const textPathEl = createSVGElement('textPath', { href: `#${pathId}`, startOffset: '50%', 'text-anchor': 'middle' });
+                         textPathEl.textContent = dayOfMonth;
+                         textEl.appendChild(textPathEl);
+                         svgElement.appendChild(textEl);
+                    }
+                }
+                cumulativeDayIndex += DAYS_IN_MONTH[monthIdx];
+            }
+             const lastDayDivAngle = (NUM_DAYS_TOTAL / NUM_DAYS_TOTAL) * 2 * Math.PI - Math.PI / 2; 
+             svgElement.appendChild(createSVGElement('line', {
+                x1: centerX + dayRingInnerRadius * Math.cos(lastDayDivAngle), y1: centerY + dayRingInnerRadius * Math.sin(lastDayDivAngle),
+                x2: centerX + dayRingOuterRadius * Math.cos(lastDayDivAngle), y2: centerY + dayRingOuterRadius * Math.sin(lastDayDivAngle),
+                stroke: '#0369A1', 'stroke-width': 0.25
+             }));
+
+
+            // Minute/Second Ring
+            const minuteTextPathRadius = (minuteRingOuterRadius + minuteRingInnerRadius) / 2;
+            const minuteFontSize = Math.max(2, minuteCellHeight * 0.60);
+            const anglePerMinuteSegment = (2 * Math.PI) / NUM_MINUTE_SEGMENTS;
+            const minuteTextArcSegmentAngle = anglePerMinuteSegment * 0.85; 
+            for (let i = 0; i < NUM_MINUTE_SEGMENTS; i++) {
+                const markAngle = (i / NUM_MINUTE_SEGMENTS) * 2 * Math.PI - (Math.PI / 2); 
+                svgElement.appendChild(createSVGElement('line', {
+                    x1: centerX + minuteRingInnerRadius * Math.cos(markAngle), y1: centerY + minuteRingInnerRadius * Math.sin(markAngle),
+                    x2: centerX + minuteRingOuterRadius * Math.cos(markAngle), y2: centerY + minuteRingOuterRadius * Math.sin(markAngle),
+                    stroke: '#94A3B8', 'stroke-width': 0.2
+                }));
+                
+                const pathId = `minuteArc${i}`;
+                const textArcStart = markAngle - (minuteTextArcSegmentAngle / 2);
+                const textArcEnd = markAngle + (minuteTextArcSegmentAngle / 2);
+
+                defs.appendChild(createSVGElement('path', { id: pathId, d: describeArc(centerX, centerY, minuteTextPathRadius, textArcStart, textArcEnd), fill: 'none' }));
+                const textEl = createSVGElement('text', { 
+                    'font-size': minuteFontSize, 
+                    fill: '#F1F5F9', 
+                    'dominant-baseline': 'middle',
+                    'fill-opacity': '0.66'
+                });
+                const textPathEl = createSVGElement('textPath', { href: `#${pathId}`, startOffset: '50%', 'text-anchor': 'middle' });
+                textPathEl.textContent = i;
+                textEl.appendChild(textPathEl);
+                svgElement.appendChild(textEl);
+            }
+
+            // Hour Ring
+            const hourTextPathRadius = (hourRingOuterRadius + hourRingInnerRadius) / 2;
+            const hourFontSize = Math.max(4, hourCellHeight * 0.55);
+            const anglePerHourSegment = (2 * Math.PI) / NUM_HOUR_SEGMENTS;
+            const hourTextArcSegmentAngle = anglePerHourSegment * 0.85; 
+            for (let i = 0; i < NUM_HOUR_SEGMENTS; i++) {
+                const markAngle = (i / NUM_HOUR_SEGMENTS) * 2 * Math.PI - (Math.PI / 2); 
+                 svgElement.appendChild(createSVGElement('line', {
+                    x1: centerX + hourRingInnerRadius * Math.cos(markAngle), y1: centerY + hourRingInnerRadius * Math.sin(markAngle),
+                    x2: centerX + hourRingOuterRadius * Math.cos(markAngle), y2: centerY + hourRingOuterRadius * Math.sin(markAngle),
+                    stroke: '#94A3B8', 'stroke-width': 0.2
+                }));
+                
+                const pathId = `hourArc${i}`;
+                const textArcStart = markAngle - (hourTextArcSegmentAngle / 2);
+                const textArcEnd = markAngle + (hourTextArcSegmentAngle / 2);
+                
+                defs.appendChild(createSVGElement('path', { id: pathId, d: describeArc(centerX, centerY, hourTextPathRadius, textArcStart, textArcEnd), fill: 'none' }));
+                const textEl = createSVGElement('text', { 
+                    'font-size': hourFontSize, 
+                    fill: '#F1F5F9', 
+                    'dominant-baseline': 'middle',
+                    'fill-opacity': '0.66'
+                });
+                const textPathEl = createSVGElement('textPath', { href: `#${pathId}`, startOffset: '50%', 'text-anchor': 'middle' });
+                textPathEl.textContent = i;
+                textEl.appendChild(textPathEl);
+                svgElement.appendChild(textEl);
+            }
+
+            // Hands
+            dayProgressHandElement = createSVGElement('path', { fill: '#00FF00', opacity: '1.0' }); 
+            seasonDayProgressHandElement = createSVGElement('path', { fill: '#FFFFFF', opacity: '1.0' });
+            hourHandElement = createSVGElement('path', { fill: '#60A5FA', opacity: '1.0' });
+            minuteHandElement = createSVGElement('path', { fill: 'white', opacity: '1.0' });
+            secondHandElement = createSVGElement('path', { fill: 'red', opacity: '0.75' });
+            
+            svgElement.appendChild(dayProgressHandElement);
+            svgElement.appendChild(seasonDayProgressHandElement);
+            svgElement.appendChild(hourHandElement); 
+            svgElement.appendChild(minuteHandElement);
+            svgElement.appendChild(secondHandElement);
+
+            // Year Text
+            const yearFontSize = Math.max(10, yearCircleRadius * 0.35);
+            yearTextElement = createSVGElement('text', {
+                x: centerX, y: centerY, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+                'font-size': yearFontSize, fill: '#38BDF8', 'font-weight': 'bold'
+            });
+            svgElement.appendChild(yearTextElement);
+
+            updateCircleDisplay(size); 
+        }
+
+        function updateCircleDisplay(size) {
+            if (!svgElement) return;
+
+            const totalRadius = size / 2;
+            const centerX = 0;
+            const centerY = 0;
+            
+            const dayHandTargetOuterRadius = totalRadius * 1.00;
+            const dayHandTargetInnerRadius = totalRadius * 0.918; 
+            const minuteRingOuterRadius = totalRadius * 0.918;
+            const minuteRingInnerRadius = totalRadius * 0.819;
+            const hourRingOuterRadius = totalRadius * 0.819;
+            const hourRingInnerRadius = totalRadius * 0.606;
+            const seasonRingOuterRadius = totalRadius * 0.606;
+            const seasonRingInnerRadius = totalRadius * 0.303;
+
+            yearTextElement.textContent = currentTime.getFullYear();
+
+            const currentDayOfMonth = currentTime.getDate();
+            const currentMonthIndex = currentTime.getMonth();
+            const displayHourForDayHand = Math.floor(currentTime.getHours() / 3) * 3; 
+            let dayOfYear = 0;
+            for (let m = 0; m < currentMonthIndex; m++) dayOfYear += DAYS_IN_MONTH[m];
+            dayOfYear += (currentDayOfMonth - 1); 
+            const progressWithinCurrentDaySegment = (currentTime.getHours() % 3) / 3 + currentTime.getMinutes() / (3 * 60) + currentTime.getSeconds() / (3 * 3600); 
+            const dayHandEpochs = displayHourForDayHand / 3; 
+            const progressForDayHand = (dayOfYear + (dayHandEpochs / 8) + (progressWithinCurrentDaySegment / 8) ) / NUM_DAYS_TOTAL;
+            
+            const centerAngleOfDayHand = (progressForDayHand * 2 * Math.PI) - (Math.PI / 2);
+            
+            const fixedAngularWidthForDayHand = 0.001;
+            const fixedAngularWidthForSeasonDayHand = 0.01; 
+
+            dayProgressHandElement.setAttribute('d', describeFilledArcSegment(
+                centerX, centerY, 
+                dayHandTargetOuterRadius, 
+                dayHandTargetInnerRadius, 
+                centerAngleOfDayHand - (fixedAngularWidthForDayHand / 2), 
+                centerAngleOfDayHand + (fixedAngularWidthForDayHand / 2)
+            ));
+
+            seasonDayProgressHandElement.setAttribute('d', describeFilledArcSegment(
+                centerX, centerY,
+                seasonRingOuterRadius, 
+                seasonRingInnerRadius, 
+                centerAngleOfDayHand - (fixedAngularWidthForSeasonDayHand / 2),
+                centerAngleOfDayHand + (fixedAngularWidthForSeasonDayHand / 2)
+            ));
+
+            const hourHandAngleRad = (hourForHourHand / NUM_HOUR_SEGMENTS) * 2 * Math.PI - (Math.PI / 2);
+            const fixedAngularWidthForHourHand = 0.015; 
+            hourHandElement.setAttribute('d', describeFilledArcSegment(
+                centerX, centerY, hourRingOuterRadius, hourRingInnerRadius,
+                hourHandAngleRad - (fixedAngularWidthForHourHand / 2), hourHandAngleRad + (fixedAngularWidthForHourHand / 2)
+            ));
+
+            const minuteHandAngleRad = (minuteForMinuteHand / NUM_MINUTE_SEGMENTS) * 2 * Math.PI - (Math.PI / 2);
+            const fixedAngularWidthForMinuteHand = 0.012;
+            minuteHandElement.setAttribute('d', describeFilledArcSegment(
+                centerX, centerY, minuteRingOuterRadius, minuteRingInnerRadius,
+                minuteHandAngleRad - (fixedAngularWidthForMinuteHand / 2), minuteHandAngleRad + (fixedAngularWidthForMinuteHand / 2)
+            ));
+
+            const currentSecondFractional = currentTime.getSeconds() + currentTime.getMilliseconds() / 1000;
+            const secondHandAngleRad = (currentSecondFractional / NUM_MINUTE_SEGMENTS) * 2 * Math.PI - (Math.PI / 2);
+            const fixedAngularWidthForSecondHand = 0.008;
+            secondHandElement.setAttribute('d', describeFilledArcSegment(
+                centerX, centerY, minuteRingOuterRadius, minuteRingInnerRadius, 
+                secondHandAngleRad - (fixedAngularWidthForSecondHand / 2), secondHandAngleRad + (fixedAngularWidthForSecondHand / 2)
+            ));
+        }
+
+        // --- Application Setup ---
+        function initializeApp() {
+            const appRoot = document.getElementById('app-root');
+            if (!appRoot) {
+                console.error("Root element #app-root not found.");
+                return;
+            }
+
+            const circleDisplaySize = 400; 
+            const containerMaxWidth = circleDisplaySize + 64; 
+
+            const appContainer = document.createElement('div');
+            appContainer.className = 'app-container';
+            appContainer.style.maxWidth = `${containerMaxWidth}px`;
+
+            const headerEl = document.createElement('header');
+            const h1 = document.createElement('h1');
+            h1.textContent = 'Visualizador de Calendario Cíclico';
+            const pDesc = document.createElement('p');
+            pDesc.textContent = 'Explora el tiempo en un formato circular único.'; // MODIFIED LINE
+            headerEl.appendChild(h1);
+            headerEl.appendChild(pDesc);
+            appContainer.appendChild(headerEl);
+
+            const main = document.createElement('main');
+            const circleVisualizationContainer = document.createElement('div');
+            circleVisualizationContainer.id = 'circle-visualization-svg-container'; 
+            circleVisualizationContainer.className = 'circle-visualization-container';
+            circleVisualizationContainer.style.maxWidth = `${circleDisplaySize}px`; 
+            main.appendChild(circleVisualizationContainer);
+            appContainer.appendChild(main);
+
+            createCircleDisplay(circleDisplaySize, circleVisualizationContainer);
+
+            // Controls Container (for resolution and download button)
+            const controlsContainer = document.createElement('div');
+            controlsContainer.className = 'controls-container';
+
+            // Resolution Controls
+            const resolutionControlsDiv = document.createElement('div');
+            resolutionControlsDiv.className = 'resolution-controls-container';
+            
+            decreaseResButton = document.createElement('button');
+            decreaseResButton.className = 'resolution-button';
+            decreaseResButton.textContent = '▼';
+            decreaseResButton.setAttribute('aria-label', 'Disminuir resolución de imagen');
+            decreaseResButton.onclick = decreaseResolution;
+            
+            resolutionDisplayText = document.createElement('span');
+            resolutionDisplayText.className = 'resolution-display';
+            
+            increaseResButton = document.createElement('button');
+            increaseResButton.className = 'resolution-button';
+            increaseResButton.textContent = '▲';
+            increaseResButton.setAttribute('aria-label', 'Aumentar resolución de imagen');
+            increaseResButton.onclick = increaseResolution;
+
+            resolutionControlsDiv.appendChild(decreaseResButton);
+            resolutionControlsDiv.appendChild(resolutionDisplayText);
+            resolutionControlsDiv.appendChild(increaseResButton);
+            controlsContainer.appendChild(resolutionControlsDiv);
+
+            // Download Image Button
+            downloadImageButton = document.createElement('button');
+            downloadImageButton.className = 'download-button';
+            downloadImageButton.setAttribute('aria-live', 'polite');
+            downloadImageButton.textContent = 'Descargar Imagen';
+            downloadImageButton.onclick = handleDownloadImage;
+            controlsContainer.appendChild(downloadImageButton);
+            
+            appContainer.appendChild(controlsContainer);
+
+
+            const footer = document.createElement('footer');
+            // footer.textContent = 'Creado con HTML, CSS y JavaScript. Descarga imágenes de alta resolución de tu calendario.';
+            appContainer.appendChild(footer);
+
+            appRoot.appendChild(appContainer);
+            
+            updateResolutionDisplay(); // Initialize display and button states
+
+            currentTime = new Date();
+            minuteForMinuteHand = currentTime.getMinutes() + (currentTime.getSeconds() / 60.0);
+            hourForHourHand = currentTime.getHours() + (currentTime.getMinutes() / 60.0);
+            
+            lastSecondEpoch = Math.floor(currentTime.getTime() / 1000);
+            lastMinuteEpoch = Math.floor(currentTime.getTime() / 60000);
+
+            setInterval(() => {
+                const now = new Date();
+                currentTime = now;
+
+                const currentSecondEpoch = Math.floor(now.getTime() / 1000);
+                if (lastSecondEpoch !== currentSecondEpoch) {
+                    minuteForMinuteHand = now.getMinutes() + (now.getSeconds() / 60.0);
+                    lastSecondEpoch = currentSecondEpoch;
+                }
+                
+                const currentMinuteEpoch = Math.floor(now.getTime() / 60000);
+                if (lastMinuteEpoch !== currentMinuteEpoch) {
+                    hourForHourHand = now.getHours() + (now.getMinutes() / 60.0);
+                    lastMinuteEpoch = currentMinuteEpoch;
+                }
+                
+                updateCircleDisplay(circleDisplaySize);
+            }, 50); 
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
